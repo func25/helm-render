@@ -1,0 +1,19 @@
+name: "Helm Render"
+description: "Renders Helm charts and outputs manifests to a target directory or syncs to a branch"
+inputs:
+  configPath:
+    description: "Path to the service configuration file"
+    required: true
+  branch:
+    description: "Branch to sync rendered manifests to (optional - if not provided, only renders locally)"
+    required: false
+  token: 
+    description: "GitHub token (required if branch is specified)"
+    required: false
+  helmExtraOpts:
+    description: "Extra command line options for helm"
+    required: false
+    default: ""
+runs:
+  using: "node20"
+  main: "dist/index.js"

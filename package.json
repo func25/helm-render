@@ -1,0 +1,23 @@
+{
+  "name": "helm-render",
+  "version": "1.0.0",
+  "description": "A GitHub Action that renders Helm charts and outputs manifests to a target directory or branch",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "package": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["github-action", "helm", "kubernetes", "devops"],
+  "author": "func25",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@actions/exec": "^1.1.1",
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.4",
+    "typescript": "^5.0.0"
+  }
+}
