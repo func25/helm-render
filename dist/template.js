@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.run = run;
+const core = __importStar(require("@actions/core"));
 const exec = __importStar(require("@actions/exec"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -42,21 +43,28 @@ const crypto = __importStar(require("crypto"));
 function getChartPath(service) {
     const urlHash = crypto.createHash("sha1").update(service.helmChart).digest("hex");
     // local chart
-    if (isLocalChart(service) || service.version) {
+    if (isLocalChart(service)) {
         return `${urlHash}/${service.helmChart}`;
     }
-    return `${urlHash}/${service.helmChart}-${service.version}`;
+    // For remote charts, always use the chart name (version is handled separately in helm pull)
+    return `${urlHash}/${service.helmChart}`;
 }
 function isLocalChart(service) {
     return service.helmChart.startsWith("./");
 }
 async function fetchRepositories(config) {
-    const repositories = config.services
+    // Deduplicate repositories by name and URL
+    const repositoriesMap = new Map();
+    config.services
         .filter((service) => service.helmRepository)
-        .map((service) => ({
-        name: service.helmRepositoryName,
-        url: service.helmRepository,
+        .forEach((service) => {
+        repositoriesMap.set(service.helmRepositoryName, service.helmRepository);
+    });
+    const repositories = Array.from(repositoriesMap.entries()).map(([name, url]) => ({
+        name,
+        url,
     }));
+    core.info(`Adding ${repositories.length} unique helm repositories`);
     const addRepoPromises = repositories.map((repo) => exec.exec(`helm repo add --force-update ${repo.name} ${repo.url}`));
     await Promise.all(addRepoPromises);
     await exec.exec(`helm repo update`);
@@ -67,7 +75,7 @@ async function downloadCharts(config, targetDir) {
         if (service.helmChart.startsWith("./")) {
             continue;
         }
-        const outputPath = path.join(targetDir, await getChartPath(service));
+        const outputPath = path.join(targetDir, getChartPath(service));
         fs.mkdirSync(outputPath, { recursive: true });
         const fullChartName = `${service.helmRepositoryName}/${service.helmChart}`;
         let cmd = `helm pull --destination ${outputPath} ${fullChartName}`;
@@ -87,14 +95,18 @@ async function run(yamlConfig, outputDir, extraOpts) {
         const chartDir = path.join(targetDir, getChartPath(service));
         const helmValuesFiles = service.helmValues || "";
         const outputPrefix = service.outputPathPrefix || ".";
-        const fullChartName = service.helmChart.startsWith("./") ? service.helmChart : `${service.helmRepositoryName}/${service.helmChart}`;
-        let cmd = `helm template --include-crds -n ${releaseNamespace} ${releaseName} ${fullChartName}`;
-        if (!isLocalChart(service)) {
-            let chartFiles = (await exec.getExecOutput(`find ${chartDir} -type f -name "*.tgz"`)).stdout.replace(/\n/g, " ").trim();
-            cmd = `helm template --include-crds -n ${releaseNamespace} ${releaseName} ${chartFiles}`;
+        let cmd = `helm template --include-crds -n ${releaseNamespace} ${releaseName}`;
+        if (isLocalChart(service)) {
+            // For local charts, use the chart path directly
+            cmd += ` ${service.helmChart}`;
         }
-        if (service.version) {
-            cmd += ` --version ${service.version}`;
+        else {
+            // For remote charts, use the downloaded .tgz file
+            const chartFiles = (await exec.getExecOutput(`find ${chartDir} -type f -name "*.tgz"`)).stdout.trim();
+            if (!chartFiles) {
+                throw new Error(`No chart files found in ${chartDir} for service ${service.name}`);
+            }
+            cmd += ` ${chartFiles}`;
         }
         cmd += ` --output-dir ${outputDir}/${outputPrefix}/${releaseNamespace}/${releaseName}`;
         if (helmValuesFiles) {
