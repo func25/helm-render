@@ -4,11 +4,16 @@
   "description": "A GitHub Action that renders Helm charts and outputs manifests to a target directory or branch",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && ncc build dist/index.js -o dist --source-map",
     "package": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["github-action", "helm", "kubernetes", "devops"],
+  "keywords": [
+    "github-action",
+    "helm",
+    "kubernetes",
+    "devops"
+  ],
   "author": "func25",
   "license": "MIT",
   "dependencies": {
@@ -18,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.4",
+    "@vercel/ncc": "^0.38.1",
     "typescript": "^5.0.0"
   }
 }
